@@ -86,6 +86,7 @@ func handleTextMessage(event *linebot.Event, message *linebot.TextMessage) {
 }
 
 func handleStickerMessage(event *linebot.Event, message *linebot.StickerMessage) {
+	fmt.Println(message.Keywords)
 	replyMessage := fmt.Sprintf(
 		"Image id is %s", message.ID)
 	if _, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
