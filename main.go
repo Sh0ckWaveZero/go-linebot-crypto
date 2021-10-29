@@ -66,26 +66,37 @@ func handleWebHook(w http.ResponseWriter, r *http.Request) {
 			groupID := event.Source.GroupID
 			RoomID := event.Source.RoomID
 			fmt.Printf("replyToken:%s\nuserID:%s\ngroupID:%s\nRoomID:%s", replyToken, userID, groupID, RoomID)
-
 			switch message := event.Message.(type) {
 			case *linebot.TextMessage:
-				if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(message.Text)).Do(); err != nil {
-					log.Print(err)
-				}
+				handleTextMessage(event, message)
 			case *linebot.StickerMessage:
-				replyMessage := fmt.Sprintf(
-					"Image id is %s", message.ID)
-				if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
-					log.Print(err)
-				}
+				handleStickerMessage(event, message)
 			case *linebot.ImageMessage:
-				replyMessage := fmt.Sprintf(
-					"sticOriginalContentURLker  is %s, OriginalContentURL is %s", message.PreviewImageURL, message.PreviewImageURL)
-				if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
-					log.Print(err)
-				}
+				handleImageMessage(event, message)
 			}
 
 		}
+	}
+}
+
+func handleTextMessage(event *linebot.Event, message *linebot.TextMessage) {
+	if _, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(message.Text)).Do(); err != nil {
+		log.Print(err)
+	}
+}
+
+func handleStickerMessage(event *linebot.Event, message *linebot.StickerMessage) {
+	replyMessage := fmt.Sprintf(
+		"Image id is %s", message.ID)
+	if _, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
+		log.Print(err)
+	}
+}
+
+func handleImageMessage(event *linebot.Event, message *linebot.ImageMessage) {
+	replyMessage := fmt.Sprintf(
+		"sticOriginalContentURLker  is %s, OriginalContentURL is %s", message.PreviewImageURL, message.PreviewImageURL)
+	if _, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
+		log.Print(err)
 	}
 }
