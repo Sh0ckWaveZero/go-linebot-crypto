@@ -2,23 +2,47 @@ package main
 
 import (
 	"fmt"
+	"go-linebot-crypto/handler"
+	"go-linebot-crypto/repository"
+	"go-linebot-crypto/service"
+	"time"
+
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/gorilla/mux"
+	"github.com/jmoiron/sqlx"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"github.com/line/line-bot-sdk-go/v7/linebot"
 )
 
-var bot *linebot.Client
-
 func main() {
+	initTimeZone()
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	db, err := connectDatabase()
+	if err != nil {
+		panic(err)
+	}
 
 	// Connect to Line Bot
-	ConnectLinebot()
+	bot := connectLineBot()
 
+	customerRepository := repository.NewCustomerRepositoryDB(db)
+	customerService := service.NewCustomerService(customerRepository)
+	customerHandler := handler.NewCustomerHandler(customerService)
+	linBotHandler := handler.NewLineBotHandler(bot)
+
+	router := mux.NewRouter()
 	// Setup HTTP Server for receiving requests from LINE platform
-	http.HandleFunc("/webhook", handleWebHook)
+	router.HandleFunc("/webhook", linBotHandler.HandleWebHook)
+	router.HandleFunc("/customers", customerHandler.GetCustomers)
+	router.HandleFunc("/customer/{customerID:[0-9]+}", customerHandler.GetCustomer).GetMethods()
 
 	// Determine port for HTTP service.
 	port := os.Getenv("PORT")
@@ -27,77 +51,54 @@ func main() {
 		log.Printf("defaulting to port %s", port)
 	}
 
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	if err := http.ListenAndServe(":"+port, router); err != nil {
 		log.Fatal(err)
 	}
 }
 
+func connectDatabase() (*sqlx.DB, error) {
+	connStr := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		os.Getenv("POSTGRES_USER"),
+		os.Getenv("POSTGRES_PASSWORD"),
+		os.Getenv("POSTGRES_HOST"),
+		os.Getenv("POSTGRES_PORT"),
+		os.Getenv("POSTGRES_DB"),
+		os.Getenv("POSTGRES_SSL"),
+	)
+	db, err := sqlx.Open("postgres", connStr)
+	if err != nil {
+		return nil, err
+	}
+	db.SetConnMaxIdleTime(3 * time.Minute)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
+
+	return db, nil
+}
+
 // Connect to Line Bot
-func ConnectLinebot() {
+func connectLineBot() *linebot.Client {
 	log.Print("🚀 starting server...")
 
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
-	bot, err = linebot.New(
+	bot, err := linebot.New(
 		os.Getenv("CHANNEL_SECRET"),
 		os.Getenv("CHANNEL_TOKEN"),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
+	return bot
 }
 
-func handleWebHook(w http.ResponseWriter, r *http.Request) {
-	events, err := bot.ParseRequest(r)
+func initTimeZone() {
+	ict, err := time.LoadLocation("Asia/Bangkok")
 	if err != nil {
-		if err == linebot.ErrInvalidSignature {
-			w.WriteHeader(400)
-		} else {
-			w.WriteHeader(500)
-		}
-		return
+		panic(err)
 	}
-	for _, event := range events {
-		if event.Type == linebot.EventTypeMessage {
-			replyToken := event.ReplyToken
-			userID := event.Source.UserID
-			groupID := event.Source.GroupID
-			RoomID := event.Source.RoomID
-			fmt.Printf("replyToken:%s\nuserID:%s\ngroupID:%s\nRoomID:%s", replyToken, userID, groupID, RoomID)
-			switch message := event.Message.(type) {
-			case *linebot.TextMessage:
-				handleTextMessage(event, message)
-			case *linebot.StickerMessage:
-				handleStickerMessage(event, message)
-			case *linebot.ImageMessage:
-				handleImageMessage(event, message)
-			}
-
-		}
-	}
-}
-
-func handleTextMessage(event *linebot.Event, message *linebot.TextMessage) {
-	if _, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(message.Text)).Do(); err != nil {
-		log.Print(err)
-	}
-}
-
-func handleStickerMessage(event *linebot.Event, message *linebot.StickerMessage) {
-	fmt.Println(message.Keywords)
-	replyMessage := fmt.Sprintf(
-		"Image id is %s", message.ID)
-	if _, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
-		log.Print(err)
-	}
-}
-
-func handleImageMessage(event *linebot.Event, message *linebot.ImageMessage) {
-	replyMessage := fmt.Sprintf(
-		"sticOriginalContentURLker  is %s, OriginalContentURL is %s", message.PreviewImageURL, message.PreviewImageURL)
-	if _, err := bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(replyMessage)).Do(); err != nil {
-		log.Print(err)
-	}
+	time.Local = ict
 }
