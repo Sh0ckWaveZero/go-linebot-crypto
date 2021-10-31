@@ -1,9 +1,12 @@
 version: "3.9"
 services:
   api:
-    build: .
+    build:
+      context: ./
+      dockerfile: go-dev.Dockerfile
+    container_name: go-linebot-crypto
     ports:
-      - "48080:8080"
-networks:
-  yadom:
-    external: true
+      - "4325:4325"
+    volumes:
+      - "./:/app"
+    working_dir: /app

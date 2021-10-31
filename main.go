@@ -73,7 +73,6 @@ func connectDatabase() (*sqlx.DB, error) {
 	db.SetConnMaxIdleTime(3 * time.Minute)
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(10)
-
 	return db, nil
 }
 
